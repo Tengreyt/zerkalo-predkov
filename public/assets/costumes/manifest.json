@@ -146,6 +146,24 @@
         "coordinate_padding": 16
       }
     },
+    "cherkeska_dots": {
+      "title": "Цифровая черкеска",
+      "kind": "body",
+      "asset": "cherkeska",
+      "effect": "body-points",
+      "sizes": [],
+      "anchors": {
+        "canvas": [497, 1188],
+        "left_shoulder": [156, 74],
+        "right_shoulder": [342, 74]
+      },
+      "headwear": "papakha_ar",
+      "background": "bg_mountains_towers",
+      "fit": {
+        "body_rows": { "waist": 0.23, "hips": 0.4, "knees": 0.7, "hem": 1 },
+        "coordinate_padding": 16
+      }
+    },
     "burka": {
       "title": "Черкеска с буркой",
       "kind": "body",
@@ -194,7 +212,7 @@
           68
         ]
       },
-      "headwear": "kortali",
+      "headwear": null,
       "background": "bg_mountains_towers",
       "fit": {
         "body_rows": {
@@ -346,7 +364,7 @@
           66
         ]
       },
-      "headwear": "kortali",
+      "headwear": null,
       "background": "bg_mountains_towers",
       "fit": {
         "body_rows": {
@@ -483,27 +501,51 @@
     "gown": {
       "title": "Мантия выпускника",
       "kind": "body",
-      "sizes": [
-        "slim",
-        "regular",
-        "large"
-      ],
+      "sizes": [],
       "anchors": {
         "canvas": [
-          1000,
-          1400
+          1024,
+          1536
         ],
         "left_shoulder": [
-          270,
-          200
+          376,
+          286
         ],
         "right_shoulder": [
-          730,
-          200
+          648,
+          286
         ]
       },
       "headwear": "mortarboard",
-      "background": "bg_campus"
+      "background": "bg_campus",
+      "fit": {
+        "body_rows": {
+          "waist": 0.26,
+          "hips": 0.43,
+          "knees": 0.72,
+          "hem": 1
+        },
+        "sleeves": {
+          "min_segment_ratio": 0.12,
+          "max_segment_ratio": 1.6,
+          "left": {
+            "polygon": [[286, 246], [456, 314], [420, 565], [254, 935], [32, 824]],
+            "rows": {
+              "shoulder": { "left": [304, 286], "right": [422, 286] },
+              "elbow": { "left": [168, 574], "right": [359, 574] },
+              "wrist": { "left": [43, 820], "right": [266, 820] }
+            }
+          },
+          "right": {
+            "polygon": [[568, 314], [738, 246], [992, 824], [770, 935], [604, 565]],
+            "rows": {
+              "shoulder": { "left": [602, 286], "right": [720, 286] },
+              "elbow": { "left": [665, 574], "right": [856, 574] },
+              "wrist": { "left": [758, 820], "right": [981, 820] }
+            }
+          }
+        }
+      }
     }
   },
   "headwear": {

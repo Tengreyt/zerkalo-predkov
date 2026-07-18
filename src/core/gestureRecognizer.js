@@ -32,6 +32,20 @@ function fingerExtended(lm, tip, pip) {
   return handDist(lm[tip], lm[0]) > handDist(lm[pip], lm[0]) * 1.13;
 }
 
+/** Общая проверка для всех команд: кисть должна быть крупной и поднятой. */
+export function analyzeControlHand(lm) {
+  if (!lm?.[20]) return { ready: false, reason: 'Рука не найдена' };
+  const wrist = lm[0];
+  const palmSize = handDist(wrist, lm[9]);
+  if (palmSize < settings.gesture.controlHandMinSize) {
+    return { ready: false, reason: 'Покажите кисть целиком и ближе к камере' };
+  }
+  if (wrist.y > settings.gesture.controlHandMaxWristY) {
+    return { ready: false, reason: 'Поднимите руку выше, чтобы выполнить жест' };
+  }
+  return { ready: true, reason: 'Рука готова' };
+}
+
 /** Резервный классификатор по геометрии 21 точки кисти. */
 export function classifyHandGeometry(lm) {
   if (!lm?.[20]) return { name: 'None', score: 0 };
@@ -90,14 +104,8 @@ export function analyzeDeliberatePalm(lm, handedness = null) {
     return { ready: false, reason: 'Не показывайте ладонь ребром' };
   }
 
-  // GestureRecognizer получает немирроренный видеокадр: у правой ладони
-  // порядок index→pinky даёт положительную нормаль, у левой — отрицательную.
-  if (handedness === 'Right' && cross <= 0) {
-    return { ready: false, reason: 'Покажите лицевую сторону ладони' };
-  }
-  if (handedness === 'Left' && cross >= 0) {
-    return { ready: false, reason: 'Покажите лицевую сторону ладони' };
-  }
+  // Знак нормали и handedness у selfie-камер отличаются между устройствами.
+  // Для подтверждения важна раскрытая кисть плоскостью к камере, а не её сторона.
   return { ready: true, reason: 'Ладонь готова', facing, handedness };
 }
 
@@ -110,7 +118,7 @@ export function isDeliberatePalm(lm, handedness = null) {
  *          name === 'None', если рука есть, но жест не распознан;
  *          null — при ошибке инференса.
  */
-export function recognizeGesture(video, timestampMs) {
+export function recognizeGesture(video, timestampMs, { requireDeliberatePalm = true } = {}) {
   if (!recognizer) return null;
   try {
     const res = recognizer.recognizeForVideo(video, timestampMs);
@@ -128,16 +136,31 @@ export function recognizeGesture(video, timestampMs) {
     // Координаты руки зеркалим под зеркальное видео.
     const wrist = wristLm ? { x: 1 - wristLm.x, y: wristLm.y } : null;
     const geometry = classifyHandGeometry(hand);
+    const controlHand = analyzeControlHand(hand);
     const palm = analyzeDeliberatePalm(hand, handedness);
     const palmReady = palm.ready;
     const gatePalm = (candidate) => {
-      if (candidate.name === 'Open_Palm' && !palmReady) {
+      if (candidate.name !== 'None' && !controlHand.ready) {
+        return {
+          name: 'None', score: 0, wrist, source: 'gesture-rejected',
+          palmReady: false, palmReason: controlHand.reason, handedness,
+        };
+      }
+      if (candidate.name === 'Open_Palm' && requireDeliberatePalm && !palmReady) {
         return {
           name: 'None', score: 0, wrist, source: 'palm-rejected',
           palmReady: false, palmReason: palm.reason, handedness,
         };
       }
-      return { ...candidate, wrist, palmReady, palmReason: palm.reason, handedness };
+      return {
+        ...candidate,
+        wrist,
+        palmReady: candidate.name === 'Open_Palm' && !requireDeliberatePalm ? true : palmReady,
+        palmReason: candidate.name === 'Open_Palm' && !requireDeliberatePalm
+          ? 'Раскрытая ладонь распознана'
+          : palm.reason,
+        handedness,
+      };
     };
     if (g && g.score >= settings.gesture.modelConfidence) {
       return gatePalm({ name: g.categoryName, score: g.score, source: 'model' });

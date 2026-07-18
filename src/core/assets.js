@@ -30,8 +30,9 @@ export async function loadAssets() {
 
   const files = new Set();
   for (const [name, costume] of Object.entries(manifest.costumes)) {
+    const assetName = costume.asset ?? name;
     const sizes = costume.sizes.length ? costume.sizes : [''];
-    for (const size of sizes) files.add(size ? `${name}_${size}.png` : `${name}.png`);
+    for (const size of sizes) files.add(size ? `${assetName}_${size}.png` : `${assetName}.png`);
   }
   for (const name of Object.keys(manifest.headwear)) files.add(`${name}.png`);
   for (const file of Object.values(manifest.backgrounds)) files.add(file);
@@ -50,9 +51,10 @@ export async function loadAssets() {
 
   // Повреждение одного необязательного костюма не должно остановить весь киоск.
   for (const [name, costume] of Object.entries(manifest.costumes)) {
+    const assetName = costume.asset ?? name;
     const sizes = costume.sizes.length ? costume.sizes : [''];
     const bodyReady = sizes.every((size) =>
-      cache.images.has(size ? `${name}_${size}.png` : `${name}.png`));
+      cache.images.has(size ? `${assetName}_${size}.png` : `${assetName}.png`));
     if (!bodyReady) {
       console.warn(`Костюм ${name} исключён: отсутствует основной PNG.`);
       delete manifest.costumes[name];
@@ -68,7 +70,8 @@ export async function loadAssets() {
   }
 
   // Разделяем рукава во время экрана загрузки, а не на первом live-кадре.
-  for (const [name, costume] of Object.entries(manifest.costumes)) {
+  for (const name of Object.keys(manifest.costumes)) {
+    const costume = getCostumeConfig(name);
     if (costume.fit?.sleeves) getCostumeLayers(name, 'regular');
   }
   return manifest;
@@ -78,12 +81,29 @@ export function getManifest() {
   return cache.manifest;
 }
 
+/** Конфигурация варианта может переиспользовать PNG и посадку базового костюма. */
+export function getCostumeConfig(costumeId) {
+  const resolvedId = cache.manifest.costumes[costumeId] ? costumeId : 'cherkeska';
+  const own = cache.manifest.costumes[resolvedId];
+  const base = own.asset && cache.manifest.costumes[own.asset]
+    ? cache.manifest.costumes[own.asset]
+    : null;
+  if (!base) return own;
+  return {
+    ...base,
+    ...own,
+    anchors: { ...base.anchors, ...own.anchors },
+    fit: { ...base.fit, ...own.fit },
+  };
+}
+
 /** PNG нательного костюма для класса комплекции (у бурки версий нет). */
 export function getCostumeImage(costumeId, bodyClass) {
   const resolvedId = cache.manifest.costumes[costumeId] ? costumeId : 'cherkeska';
-  const costume = cache.manifest.costumes[resolvedId];
+  const costume = getCostumeConfig(resolvedId);
+  const assetName = costume.asset ?? resolvedId;
   const safeClass = costume.sizes.includes(bodyClass) ? bodyClass : (costume.sizes[0] ?? '');
-  const file = costume.sizes.length ? `${resolvedId}_${safeClass}.png` : `${resolvedId}.png`;
+  const file = costume.sizes.length ? `${assetName}_${safeClass}.png` : `${assetName}.png`;
   return cache.images.get(file);
 }
 
@@ -130,7 +150,7 @@ function clippedLayer(image, mask) {
  */
 export function getCostumeLayers(costumeId, bodyClass) {
   const resolvedId = cache.manifest.costumes[costumeId] ? costumeId : 'cherkeska';
-  const costume = cache.manifest.costumes[resolvedId];
+  const costume = getCostumeConfig(resolvedId);
   const source = getCostumeImage(resolvedId, bodyClass);
   if (!costume.fit?.sleeves) return { source, torso: source, sleeves: null };
 
@@ -164,7 +184,7 @@ export function getHeadwearImage(headwearId) {
 }
 
 export function getBackgroundImage(costumeId) {
-  const costume = cache.manifest.costumes[costumeId] ?? cache.manifest.costumes.cherkeska;
+  const costume = getCostumeConfig(costumeId);
   const requested = cache.manifest.backgrounds[costume?.background];
   if (requested && cache.images.has(requested)) return cache.images.get(requested);
   for (const file of Object.values(cache.manifest.backgrounds)) {

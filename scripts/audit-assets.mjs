@@ -55,9 +55,10 @@ async function inspect(file, expectedCanvas = null, role = 'asset') {
 }
 
 for (const [id, costume] of Object.entries(manifest.costumes)) {
+  const assetId = costume.asset ?? id;
   const sizes = costume.sizes.length ? costume.sizes : [''];
   for (const size of sizes) {
-    await inspect(`${id}${size ? `_${size}` : ''}.png`, costume.anchors.canvas, `costume:${id}`);
+    await inspect(`${assetId}${size ? `_${size}` : ''}.png`, costume.anchors.canvas, `costume:${id}`);
   }
 }
 for (const [id, item] of Object.entries(manifest.headwear)) {

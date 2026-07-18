@@ -49,6 +49,10 @@ async function openQr() {
       <div v-if="showQr" class="qr-popup no-print" @click="showQr = false">
         <img :src="appState.qrUrl" alt="QR-код" />
         <p>Наведите камеру телефона · ссылка действует около часа</p>
+        <small :class="{ public: appState.shareUrl?.startsWith('https://') }">
+          {{ appState.shareUrl?.startsWith('https://') ? '● Публичная HTTPS-ссылка готова' : '● Только локальная Wi-Fi сеть' }}
+        </small>
+        <code>{{ appState.shareUrl }}</code>
       </div>
     </transition>
   </div>
@@ -105,6 +109,18 @@ async function openQr() {
 .qr-popup p {
   color: #f3ecd9;
   font-size: 24px;
+}
+.qr-popup small {
+  color: #ffc46b;
+  font: 600 15px/1.2 Arial, sans-serif;
+}
+.qr-popup small.public { color: #79e6ae; }
+.qr-popup code {
+  max-width: min(760px, 88vw);
+  overflow-wrap: anywhere;
+  color: rgba(243, 236, 217, 0.65);
+  font-size: 13px;
+  text-align: center;
 }
 @media (max-width: 700px), (max-height: 700px) {
   .result-screen { gap: 14px; padding: 12px; }

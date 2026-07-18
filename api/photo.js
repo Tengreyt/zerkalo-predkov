@@ -6,9 +6,6 @@ const ID_RE = /^([a-z0-9]+)-([a-f0-9]{32})$/;
 
 export default async function handler(request) {
   if (request.method !== 'GET') return new Response('Method not allowed', { status: 405 });
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    return new Response('QR storage is not configured', { status: 503 });
-  }
   const url = new URL(request.url);
   const id = url.searchParams.get('id') ?? '';
   const match = ID_RE.exec(id);
@@ -21,7 +18,13 @@ export default async function handler(request) {
     return new Response('Срок действия фотографии истёк', { status: 410 });
   }
 
-  const result = await get(pathname, { access: 'private' });
+  let result;
+  try {
+    result = await get(pathname, { access: 'private' });
+  } catch (error) {
+    console.error('Photo blob read failed:', error);
+    return new Response('Хранилище фотографий временно недоступно', { status: 503 });
+  }
   if (!result || result.statusCode !== 200 || !result.stream) {
     return new Response('Фотография не найдена', { status: 404 });
   }

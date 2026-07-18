@@ -200,13 +200,24 @@ function triangleArea(a, b, c) {
  */
 export function isWarpMeshSafe(mesh, minArea = 3) {
   if (!mesh?.rows || mesh.rows.length < 2) return false;
+  const sleeveCanRunUpward = mesh.kind === 'sleeve' || mesh.kind === 'sleeve-static';
+  let expectedSign = null;
   for (let i = 0; i < mesh.rows.length - 1; i++) {
     const top = mesh.rows[i];
     const bottom = mesh.rows[i + 1];
     const points = [top.left, top.right, bottom.left, bottom.right];
     if (!points.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))) return false;
-    if (triangleArea(top.left, top.right, bottom.left) <= minArea) return false;
-    if (triangleArea(top.right, bottom.right, bottom.left) <= minArea) return false;
+    const areas = [
+      triangleArea(top.left, top.right, bottom.left),
+      triangleArea(top.right, bottom.right, bottom.left),
+    ];
+    if (areas.some((area) => Math.abs(area) <= minArea)) return false;
+    if (!sleeveCanRunUpward && areas.some((area) => area < 0)) return false;
+    for (const area of areas) {
+      const sign = Math.sign(area);
+      if (expectedSign == null) expectedSign = sign;
+      else if (sign !== expectedSign) return false;
+    }
   }
   return true;
 }
@@ -379,7 +390,8 @@ export function buildStaticSleeveMeshes(bodyMesh, costume) {
 
 /**
  * Сетка деформации нательного PNG. В отличие от одного drawImage-прямоугольника,
- * она привязывает одежду к плечам, талии, бёдрам, коленям и лодыжкам.
+ * она привязывает одежду к нескольким сечениям корпуса и к ногам, когда они видны.
+ * Если ноги вне кадра, низ безопасно продолжается по оси плечи → таз.
  * Ряды описывают границы горизонтальных полос исходной картинки.
  */
 export function buildBodyMesh(lm, W, H, costume) {
@@ -395,17 +407,6 @@ export function buildBodyMesh(lm, W, H, costume) {
     toPx(lm[LM.RIGHT_HIP], W, H),
     shoulders.direction,
   );
-  let knees = pairFrame(
-    toPx(lm[LM.LEFT_KNEE], W, H),
-    toPx(lm[LM.RIGHT_KNEE], W, H),
-    hips.direction,
-  );
-  let ankles = pairFrame(
-    toPx(lm[LM.LEFT_ANKLE], W, H),
-    toPx(lm[LM.RIGHT_ANKLE], W, H),
-    knees.direction,
-  );
-
   const anchors = costume.anchors;
   const shoulderAnchorWidth = Math.abs(
     anchors.right_shoulder[0] - anchors.left_shoulder[0],
@@ -425,6 +426,49 @@ export function buildBodyMesh(lm, W, H, costume) {
     x: torsoDirectionRaw.x / torsoLength,
     y: torsoDirectionRaw.y / torsoLength,
   };
+  const minVis = settings.overlay.minVisibility;
+  const pairVisible = (left, right) =>
+    lm[left]?.visibility >= minVis && lm[right]?.visibility >= minVis;
+  const projectedCenter = (origin, distance, maxY) => {
+    const raw = {
+      x: origin.x + torsoDirection.x * distance,
+      y: origin.y + torsoDirection.y * distance,
+    };
+    if (raw.y <= maxY || raw.y <= origin.y) return raw;
+    const amount = (maxY - origin.y) / (raw.y - origin.y);
+    return mixPoint(origin, raw, clamp(amount, 0, 1));
+  };
+  const fallbackFrame = (center, span, direction) => ({ center, span, direction });
+
+  let knees = pairVisible(LM.LEFT_KNEE, LM.RIGHT_KNEE)
+    ? pairFrame(
+      toPx(lm[LM.LEFT_KNEE], W, H),
+      toPx(lm[LM.RIGHT_KNEE], W, H),
+      hips.direction,
+    )
+    : null;
+  if (!knees || knees.center.y <= hips.center.y + H * 0.025) {
+    knees = fallbackFrame(
+      projectedCenter(hips.center, torsoLength * 0.95, H * 0.88),
+      hips.span * 0.86,
+      hips.direction,
+    );
+  }
+
+  let ankles = pairVisible(LM.LEFT_ANKLE, LM.RIGHT_ANKLE)
+    ? pairFrame(
+      toPx(lm[LM.LEFT_ANKLE], W, H),
+      toPx(lm[LM.RIGHT_ANKLE], W, H),
+      knees.direction,
+    )
+    : null;
+  if (!ankles || ankles.center.y <= knees.center.y + H * 0.025) {
+    ankles = fallbackFrame(
+      projectedCenter(hips.center, torsoLength * 2.05, H * 1.02),
+      hips.span * 0.72,
+      knees.direction,
+    );
+  }
   if (settings.positioningStrategy === 'hybrid') {
     // Низ сохраняет настоящую высоту, но его центр меньше реагирует на шум
     // коленей/стоп. Так корпус остаётся многоточечным, а подол не «гуляет».
@@ -444,6 +488,9 @@ export function buildBodyMesh(lm, W, H, costume) {
     y: shoulders.center.y - torsoDirection.y * sourceShoulderY * k,
   };
   const waistCenter = mixPoint(shoulders.center, hips.center, warp.waistPosition);
+  const chestAmount = warp.waistPosition * 0.48;
+  const chestCenter = mixPoint(shoulders.center, hips.center, chestAmount);
+  const highHipCenter = mixPoint(waistCenter, hips.center, 0.52);
 
   // Корректируем ширину мягко: крой (клёш, рукава, бурка) уже находится в альфа-канале PNG.
   const shapeScale = (span, reference) => clamp(
@@ -454,6 +501,8 @@ export function buildBodyMesh(lm, W, H, costume) {
   const waistSpan = shoulders.span + (hips.span - shoulders.span) * warp.waistPosition;
   const waistScale = shapeScale(waistSpan, warp.referenceWidth.waist);
   const hipScale = shapeScale(hips.span, warp.referenceWidth.hips);
+  const chestScale = 1 + (waistScale - 1) * 0.48;
+  const highHipScale = waistScale + (hipScale - waistScale) * 0.52;
   const kneeScale = hipScale * 0.7 + 0.3;
   const hemScale = hipScale * 0.35 + 0.65;
 
@@ -461,6 +510,8 @@ export function buildBodyMesh(lm, W, H, costume) {
   const kneeDirection = blendDirection(hipDirection, knees.direction, 0.2);
   const ankleDirection = blendDirection(kneeDirection, ankles.direction, 0.12);
   const source = { ...warp.sourceRows, ...(costume.fit?.body_rows ?? {}) };
+  const sourceWaistY = sourceShoulderY + sourceBelowShoulders * source.waist;
+  const sourceHipY = sourceShoulderY + sourceBelowShoulders * source.hips;
 
   return {
     sourceWidth: anchors.canvas[0],
@@ -469,13 +520,25 @@ export function buildBodyMesh(lm, W, H, costume) {
       meshRow(0, topCenter, shoulders.direction, baseHalfWidth),
       meshRow(sourceShoulderY, shoulders.center, shoulders.direction, baseHalfWidth),
       meshRow(
-        sourceShoulderY + sourceBelowShoulders * source.waist,
+        sourceShoulderY + (sourceWaistY - sourceShoulderY) * 0.48,
+        chestCenter,
+        blendDirection(shoulders.direction, hipDirection, chestAmount),
+        baseHalfWidth * chestScale,
+      ),
+      meshRow(
+        sourceWaistY,
         waistCenter,
         blendDirection(shoulders.direction, hipDirection, warp.waistPosition),
         baseHalfWidth * waistScale,
       ),
       meshRow(
-        sourceShoulderY + sourceBelowShoulders * source.hips,
+        sourceWaistY + (sourceHipY - sourceWaistY) * 0.52,
+        highHipCenter,
+        hipDirection,
+        baseHalfWidth * highHipScale,
+      ),
+      meshRow(
+        sourceHipY,
         hips.center,
         hipDirection,
         baseHalfWidth * hipScale,
@@ -594,25 +657,35 @@ function layoutFixed(W, H, costume, headwear) {
 }
 
 /**
- * Уверенная ли поза для точной посадки: видны голова, корпус и ноги, а суставы
- * идут сверху вниз. При частичном человеке одежду не растягиваем по неверным точкам.
+ * Для посадки достаточно головы и корпуса. Колени и стопы улучшают низ костюма,
+ * но не блокируют примерку, если человек показан по таз или ноги вне кадра.
  */
 export function isPoseConfident(lm) {
   const minVis = settings.overlay.minVisibility;
   const required = [
     LM.LEFT_SHOULDER, LM.RIGHT_SHOULDER,
     LM.LEFT_HIP, LM.RIGHT_HIP,
-    LM.LEFT_KNEE, LM.RIGHT_KNEE,
-    LM.LEFT_ANKLE, LM.RIGHT_ANKLE,
-    LM.LEFT_EAR, LM.RIGHT_EAR,
   ];
   if (!required.every((i) => lm[i] && lm[i].visibility >= minVis)) return false;
 
+  const noseVisible = lm[LM.NOSE]?.visibility >= minVis;
+  const earsVisible =
+    lm[LM.LEFT_EAR]?.visibility >= minVis && lm[LM.RIGHT_EAR]?.visibility >= minVis;
+  if (!noseVisible && !earsVisible) return false;
+
   const shoulderY = (lm[LM.LEFT_SHOULDER].y + lm[LM.RIGHT_SHOULDER].y) / 2;
   const hipY = (lm[LM.LEFT_HIP].y + lm[LM.RIGHT_HIP].y) / 2;
-  const kneeY = (lm[LM.LEFT_KNEE].y + lm[LM.RIGHT_KNEE].y) / 2;
-  const ankleY = (lm[LM.LEFT_ANKLE].y + lm[LM.RIGHT_ANKLE].y) / 2;
-  return hipY > shoulderY + 0.035 && kneeY > hipY + 0.04 && ankleY > kneeY + 0.04;
+  const headY = noseVisible
+    ? lm[LM.NOSE].y
+    : (lm[LM.LEFT_EAR].y + lm[LM.RIGHT_EAR].y) / 2;
+  const shoulderSpan = pointDistance(lm[LM.LEFT_SHOULDER], lm[LM.RIGHT_SHOULDER]);
+  const hipSpan = pointDistance(lm[LM.LEFT_HIP], lm[LM.RIGHT_HIP]);
+  return (
+    headY < shoulderY - 0.02 &&
+    hipY > shoulderY + 0.035 &&
+    shoulderSpan > 0.025 &&
+    hipSpan > 0.018
+  );
 }
 
 /** Площадь бокса скелета — для выбора самого крупного (ближайшего) человека. */

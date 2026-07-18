@@ -8,8 +8,9 @@ import {
   isWarpMeshSafe,
   isPoseConfident,
 } from '../src/core/costumeLayout.js';
-import { LandmarkSmoother } from '../src/core/smoothing.js';
+import { LandmarkSmoother, SleeveMeshSmoother } from '../src/core/smoothing.js';
 import { settings } from '../src/config/settings.js';
+import { readFileSync } from 'node:fs';
 
 function makeLandmarks() {
   const lm = Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, visibility: 0.99 }));
@@ -41,11 +42,11 @@ const costume = {
   },
 };
 
-test('full pose produces a monotonic six-row body mesh ending at the ankles', () => {
+test('full pose produces a flexible eight-row body mesh ending at the ankles', () => {
   const lm = makeLandmarks();
   const mesh = buildBodyMesh(lm, 1280, 720, costume);
   assert.ok(mesh);
-  assert.equal(mesh.rows.length, 6);
+  assert.equal(mesh.rows.length, 8);
   for (let i = 1; i < mesh.rows.length; i++) {
     assert.ok(mesh.rows[i].sourceY > mesh.rows[i - 1].sourceY);
   }
@@ -54,14 +55,21 @@ test('full pose produces a monotonic six-row body mesh ending at the ankles', ()
   assert.ok(Math.abs(hemCenterY - 0.93 * 720) < 0.01);
 });
 
-test('partial or geometrically broken pose is rejected', () => {
+test('torso pose is accepted without feet but broken torso is rejected', () => {
   const partial = makeLandmarks();
   partial[28].visibility = 0.1;
-  assert.equal(isPoseConfident(partial), false);
+  partial[27].visibility = 0.1;
+  partial[25].visibility = 0.1;
+  partial[26].visibility = 0.1;
+  assert.equal(isPoseConfident(partial), true);
+  const partialMesh = buildBodyMesh(partial, 1280, 720, costume);
+  assert.ok(partialMesh);
+  assert.equal(partialMesh.rows.length, 8);
+  assert.ok(partialMesh.rows.at(-1).left.y <= 720 * 1.02);
 
   const broken = makeLandmarks();
-  broken[25].y = 0.45;
-  broken[26].y = 0.45;
+  broken[23].y = 0.24;
+  broken[24].y = 0.24;
   assert.equal(isPoseConfident(broken), false);
   assert.equal(isPoseConfident(makeLandmarks()), true);
 });
@@ -79,6 +87,50 @@ test('adaptive smoothing damps stationary landmark jitter', () => {
   }
   const spread = (values) => Math.max(...values) - Math.min(...values);
   assert.ok(spread(output.slice(10)) < spread(input) * 0.35);
+});
+
+test('sleeve mesh follows fast motion smoothly and holds through a short wrist dropout', () => {
+  const meshAt = (x, inFront = false) => ({
+    sourceWidth: 100,
+    sourceHeight: 300,
+    kind: 'sleeve',
+    inFront,
+    rows: [0, 75, 150, 225, 300].map((sourceY, index) => ({
+      sourceY,
+      sourceLeft: 0,
+      sourceRight: 50,
+      left: { x: x + index * 10, y: index * 20 },
+      right: { x: x + 40 + index * 10, y: index * 20 },
+    })),
+  });
+  const smoother = new SleeveMeshSmoother({
+    followMs: 105,
+    fastFollowMs: 38,
+    speedForFast: 720,
+    dropoutHoldMs: 360,
+    fallbackMs: 280,
+    inFrontFrames: 3,
+  });
+  const initial = smoother.update({ left: meshAt(0) }, null, 0).left;
+  const moving = smoother.update({ left: meshAt(100, true) }, null, 16).left;
+  assert.ok(moving.rows[0].left.x > initial.rows[0].left.x);
+  assert.ok(moving.rows[0].left.x < 100);
+
+  const held = smoother.update({ left: null }, { left: meshAt(-80) }, 160).left;
+  assert.equal(held.rows[0].left.x, moving.rows[0].left.x);
+
+  const fallbackBlend = smoother.update({ left: null }, { left: meshAt(-80) }, 560).left;
+  assert.ok(fallbackBlend.rows[0].left.x < held.rows[0].left.x);
+  assert.ok(fallbackBlend.rows[0].left.x > -80);
+});
+
+test('both Gabali variants explicitly disable headwear', () => {
+  const manifest = JSON.parse(readFileSync(
+    new URL('../public/assets/costumes/manifest.json', import.meta.url),
+    'utf8',
+  ));
+  assert.equal(manifest.costumes.gabali_green.headwear, null);
+  assert.equal(manifest.costumes.gabali_red.headwear, null);
 });
 
 test('AR headwear has explicit top, crown, band and bottom support rows', () => {
@@ -145,6 +197,25 @@ test('sleeves are independently mapped to shoulder, elbow and wrist', () => {
   // В зеркальном кадре визуально левая рука — MediaPipe RIGHT_ELBOW.
   assert.ok(Math.abs(elbowCenter.x - 0.69 * 1280) > 100); // left mesh is on screen-left
   assert.ok(elbowCenter.x < 1280 / 2);
+});
+
+test('graduation gown has complete safe sleeve meshes when both arms are raised', () => {
+  const manifest = JSON.parse(readFileSync(
+    new URL('../public/assets/costumes/manifest.json', import.meta.url),
+    'utf8',
+  ));
+  const gown = manifest.costumes.gown;
+  const lm = makeLandmarks();
+  Object.assign(lm[13], { x: 0.24, y: 0.22 });
+  Object.assign(lm[15], { x: 0.16, y: 0.10 });
+  Object.assign(lm[14], { x: 0.76, y: 0.22 });
+  Object.assign(lm[16], { x: 0.84, y: 0.10 });
+  const sleeves = buildSleeveMeshes(lm, 1280, 720, gown);
+  assert.ok(sleeves.left && sleeves.right);
+  assert.ok(isWarpMeshSafe(sleeves.left));
+  assert.ok(isWarpMeshSafe(sleeves.right));
+  assert.equal(sleeves.left.rows.length, 5);
+  assert.equal(sleeves.right.rows.length, 5);
 });
 
 test('sleeve moves in front of torso when the arm crosses toward camera', () => {

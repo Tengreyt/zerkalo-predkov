@@ -13,13 +13,16 @@ import {
   closeGestureRecognizer,
 } from '../core/gestureRecognizer.js';
 import { GestureController } from '../core/gestureController.js';
+import { SideGestureNavigator } from '../core/sideGestureNavigator.js';
 import {
   nextCostume, prevCostume, toggleHeadwear, toggleDescription,
 } from '../store/appState.js';
 import { LandmarkSmoother } from '../core/smoothing.js';
 import { BodyClassSampler, computeBodyRatio, classifyByRatio } from '../core/bodyClassifier.js';
 import { isPoseConfident, skeletonArea } from '../core/costumeLayout.js';
-import { drawMirroredVideo, drawPersonCostume, drawSkeleton } from '../core/renderer.js';
+import {
+  drawMirroredVideo, drawPersonCostume, drawSkeleton, resetSleeveSmoothing,
+} from '../core/renderer.js';
 import { composePhoto, closePhotoProcessor } from '../core/photoProcessor.js';
 
 const video = document.createElement('video');
@@ -39,19 +42,21 @@ function makeTrack() {
     lm: null,
   };
 }
-const tracks = [makeTrack(), makeTrack(), makeTrack()];
+const tracks = Array.from({ length: settings.pose.numPoses }, makeTrack);
 
 let canvas = null;
 let ctx = null;
 let running = false;
 let countdownActive = false;
 let animationFrameId = null;
-let countdownTimer = null;
+let countdownStartedAt = null;
 
 const gestureCtl = new GestureController();
+const sideNavigator = new SideGestureNavigator({
+  holdMs: settings.gesture.navigationHoldMs,
+  dropoutGraceMs: settings.gesture.navigationDropoutGraceMs,
+});
 let lastGestureAt = -Infinity;
-/** Момент, когда человек впервые устойчиво появился в IDLE (для авто-входа). */
-let presentSince = null;
 /** Последний набор активных слотов — переиспользуем на кадрах без нового видео. */
 let lastActive = [];
 /** Гистерезис подсказки позы: сколько новых кадров подряд поза «неуверенная». */
@@ -121,6 +126,8 @@ function tick(now) {
   const isNewFrame = video.currentTime !== lastVideoTime;
   if (isNewFrame) lastVideoTime = video.currentTime;
 
+  if (appState.screen === SCREENS.LIVE && countdownActive) updateCaptureCountdown(now);
+
   // Во время сегментации полностью останавливаем остальные ML-инференсы.
   if (appState.screen === SCREENS.PROCESSING) return;
 
@@ -156,30 +163,37 @@ function tick(now) {
   const active = lastActive;
   appState.personPresent = lastDetectedCount > 0;
 
-  if (appState.screen === SCREENS.IDLE) handleIdlePresence(lastDetectedCount, now);
   if (appState.screen === SCREENS.LIVE) renderLive(active, W, H, isNewFrame);
   recordPerf('render', performance.now() - renderStartedAt);
 
   countFps(now);
 }
 
-/** IDLE: жест-вход основной, авто-вход через idleAutoEnterMs — как страховка. */
-function handleIdlePresence(detectedCount, now) {
-  if (detectedCount > 0) {
-    if (presentSince == null) presentSince = now;
-    if (now - presentSince > settings.gesture.idleAutoEnterMs) enterLive();
-  } else {
-    presentSince = null;
-  }
-}
-
 /** Один шаг распознавания жеста + диспетчер действий по текущему экрану. */
 function updateGesture(now) {
   const startedAt = performance.now();
-  const g = recognizeGesture(video, now);
+  // Для входа важна отзывчивость: достаточно устойчиво раскрытой ладони.
+  // Для фото и повторной съёмки сохраняем строгую проверку стороны/положения кисти.
+  const g = recognizeGesture(video, now, {
+    requireDeliberatePalm: appState.screen !== SCREENS.IDLE,
+  });
   recordPerf('gesture', performance.now() - startedAt);
-  const ev = gestureCtl.update(g?.name ?? 'None', now);
-  appState.gesture = ev.name;
+  // В LIVE раскрытая ладонь больше не является командой: для фото используется
+  // отдельный, лучше различимый жест 👎. Ладонь остаётся только входом/«ещё раз».
+  if (countdownActive) sideNavigator.reset();
+  const navigation = appState.screen === SCREENS.LIVE && !countdownActive
+    ? sideNavigator.update(g, now)
+    : { direction: null, progress: 0, action: null };
+  appState.navigationDirection = navigation.direction;
+  appState.navigationProgress = navigation.progress;
+  if (navigation.action === 'next') nextCostume();
+  else if (navigation.action === 'prev') prevCostume();
+
+  const controlGesture = appState.screen === SCREENS.LIVE && ['Open_Palm', 'Victory'].includes(g?.name)
+    ? 'None'
+    : (g?.name ?? 'None');
+  const ev = gestureCtl.update(controlGesture, now);
+  appState.gesture = navigation.direction ? 'Victory' : ev.name;
   appState.gestureSource = g?.source ?? 'none';
   appState.palmReady = g?.palmReady ?? false;
   appState.palmReason = g?.palmReason ?? 'Рука не найдена';
@@ -195,11 +209,9 @@ function dispatchGesture(screen, ev) {
   }
   if (screen === SCREENS.LIVE) {
     if (countdownActive) return;
-    if (hold) return startCapture(); // ✋ удержание — сделать фото
-    if (tap === 'Thumb_Up') nextCostume();
-    else if (tap === 'Victory') prevCostume();
-    else if (tap === 'Pointing_Up') toggleDescription();
+    if (tap === 'Pointing_Up') toggleDescription();
     else if (tap === 'Closed_Fist') toggleHeadwear();
+    else if (tap === 'Thumb_Down') startCapture(); // 👎 — сделать фото
     return;
   }
   if (screen === SCREENS.RESULT) {
@@ -208,15 +220,18 @@ function dispatchGesture(screen, ev) {
 }
 
 export function enterLive() {
-  presentSince = null;
   gestureCtl.reset({ requireRelease: true });
+  sideNavigator.reset();
   appState.holdProgress = 0;
+  appState.countdownProgress = 0;
   goTo(SCREENS.LIVE);
 }
 
 export function backToLive() {
   gestureCtl.reset({ requireRelease: true });
+  sideNavigator.reset();
   appState.holdProgress = 0;
+  appState.countdownProgress = 0;
   appState.photoUrl = null;
   appState.qrUrl = null;
   appState.qrStatus = 'idle';
@@ -235,9 +250,10 @@ function updateTracks(poses, timestampMs = performance.now()) {
 
   if (poses) {
     lastDetectedCount = poses.filter(Boolean).length;
+    const assignedPoses = assignPosesToTracks(poses);
     for (let i = 0; i < tracks.length; i++) {
       const t = tracks[i];
-      const lm = poses[i] ? mirrorLandmarks(poses[i]) : null;
+      const lm = assignedPoses[i];
       if (lm) {
         t.confident = isPoseConfident(lm);
         if (t.confident) {
@@ -263,11 +279,13 @@ function updateTracks(poses, timestampMs = performance.now()) {
   }
 
   // Плавное появление/затухание костюма вместо дёрганья
-  for (const t of tracks) {
+  for (let i = 0; i < tracks.length; i++) {
+    const t = tracks[i];
     const target = t.everConfident && t.lostFrames < maxLost && t.lm ? 1 : 0;
     t.opacity += Math.sign(target - t.opacity) * Math.min(fade, Math.abs(target - t.opacity));
     if (t.lostFrames > maxLost * 4) {
       t.smoother.reset();
+      resetSleeveSmoothing(i);
       t.lm = null;
       t.everConfident = false;
     }
@@ -283,6 +301,60 @@ function updateTracks(poses, timestampMs = performance.now()) {
     return [alive[0].i];
   }
   return alive.map(({ i }) => i);
+}
+
+function poseCenter(lm) {
+  const points = [11, 12, 23, 24].map((i) => lm?.[i]).filter(Boolean);
+  if (!points.length) return null;
+  return {
+    x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
+    y: points.reduce((sum, p) => sum + p.y, 0) / points.length,
+  };
+}
+
+/**
+ * MediaPipe может менять порядок двух людей между кадрами. Привязываем свежие
+ * позы к ближайшим существующим трекам, чтобы одежда не перескакивала между ними.
+ */
+function assignPosesToTracks(poses) {
+  const candidates = poses.filter(Boolean).map(mirrorLandmarks);
+  const assigned = Array(tracks.length).fill(null);
+  const usedTracks = new Set();
+  const usedCandidates = new Set();
+  const pairs = [];
+
+  for (let trackIndex = 0; trackIndex < tracks.length; trackIndex++) {
+    const previous = poseCenter(tracks[trackIndex].lm);
+    if (!previous) continue;
+    for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
+      const next = poseCenter(candidates[candidateIndex]);
+      if (!next) continue;
+      pairs.push({
+        trackIndex,
+        candidateIndex,
+        distance: Math.hypot(next.x - previous.x, next.y - previous.y),
+      });
+    }
+  }
+  pairs.sort((a, b) => a.distance - b.distance);
+  for (const pair of pairs) {
+    if (usedTracks.has(pair.trackIndex) || usedCandidates.has(pair.candidateIndex)) continue;
+    assigned[pair.trackIndex] = candidates[pair.candidateIndex];
+    usedTracks.add(pair.trackIndex);
+    usedCandidates.add(pair.candidateIndex);
+  }
+
+  const remainingCandidates = candidates
+    .map((lm, index) => ({ lm, index, x: poseCenter(lm)?.x ?? 0.5 }))
+    .filter(({ index }) => !usedCandidates.has(index))
+    .sort((a, b) => a.x - b.x);
+  const remainingTracks = tracks
+    .map((_, index) => index)
+    .filter((index) => !usedTracks.has(index));
+  for (let i = 0; i < remainingCandidates.length; i++) {
+    assigned[remainingTracks[i]] = remainingCandidates[i].lm;
+  }
+  return assigned;
 }
 
 function renderLive(activeIdx, W, H, isNewFrame) {
@@ -307,6 +379,9 @@ function renderLive(activeIdx, W, H, isNewFrame) {
       t.opacity,
       appState.showHeadwear,
       appState.debug,
+      i,
+      performance.now(),
+      isNewFrame,
     );
 
     if (appState.debug) drawSkeleton(ctx, t.lm, W, H);
@@ -316,7 +391,7 @@ function renderLive(activeIdx, W, H, isNewFrame) {
   appState.captureBlockReason = anyConfident
     ? null
     : lastDetectedCount > 0
-      ? 'Поза неполная: должны быть видны плечи и стопы'
+      ? 'Покажите голову, плечи, талию и таз'
       : 'Человек не найден в кадре';
 
   // Живой r в debug-режиме — по главному человеку
@@ -396,7 +471,7 @@ export function startCapture() {
     return;
   }
   if (!appState.poseReady) {
-    appState.captureBlockReason = 'Поза неполная: должны быть видны плечи и стопы';
+    appState.captureBlockReason = 'Покажите голову, плечи, талию и таз';
     return;
   }
   appState.captureBlockReason = null;
@@ -406,19 +481,23 @@ export function startCapture() {
   gestureCtl.reset({ requireRelease: true });
   appState.holdProgress = 0;
   appState.countdown = settings.timers.countdown;
+  appState.countdownProgress = 0;
+  countdownStartedAt = performance.now();
   touchActivity();
+}
 
-  const step = () => {
-    appState.countdown--;
-    if (appState.countdown > 0) {
-      countdownTimer = setTimeout(step, 1000);
-    } else {
-      appState.countdown = null;
-      countdownActive = false;
-      capturePhoto();
-    }
-  };
-  countdownTimer = setTimeout(step, 1000);
+/** Единый таймер съёмки: число и кольцо всегда показывают один и тот же прогресс. */
+function updateCaptureCountdown(now) {
+  const duration = settings.timers.countdown * 1000;
+  const elapsed = Math.max(0, now - countdownStartedAt);
+  appState.countdownProgress = Math.min(1, elapsed / duration);
+  appState.countdown = Math.max(1, Math.ceil((duration - elapsed) / 1000));
+  if (elapsed < duration) return;
+
+  countdownActive = false;
+  countdownStartedAt = null;
+  appState.countdown = null;
+  capturePhoto();
 }
 
 async function capturePhoto() {
@@ -530,8 +609,9 @@ export async function preparePhotoQr() {
 export function stopMirror() {
   running = false;
   countdownActive = false;
-  clearTimeout(countdownTimer);
-  countdownTimer = null;
+  countdownStartedAt = null;
+  appState.countdown = null;
+  appState.countdownProgress = 0;
   if (animationFrameId != null) cancelAnimationFrame(animationFrameId);
   animationFrameId = null;
   const stream = video.srcObject;
@@ -541,4 +621,5 @@ export function stopMirror() {
   closePoseTracker();
   closeGestureRecognizer();
   closePhotoProcessor();
+  resetSleeveSmoothing();
 }

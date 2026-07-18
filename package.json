@@ -6,6 +6,7 @@
   "description": "Интерактивная виртуальная примерочная национального костюма — экспонат цифрового музея ЧГУ",
   "scripts": {
     "dev": "vite",
+    "exhibit": "node scripts/start-exhibit.mjs",
     "build": "vite build",
     "test": "node --test",
     "preview": "vite preview",

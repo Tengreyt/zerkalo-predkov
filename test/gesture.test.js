@@ -1,10 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  analyzeControlHand,
   classifyHandGeometry,
   isDeliberatePalm,
 } from '../src/core/gestureRecognizer.js';
 import { GestureController } from '../src/core/gestureController.js';
+import { SideGestureNavigator } from '../src/core/sideGestureNavigator.js';
 
 function hand(extended = [], thumb = false) {
   const lm = Array.from({ length: 21 }, () => ({ x: 0.5, y: 0.72, z: 0 }));
@@ -28,14 +30,14 @@ test('geometry fallback recognizes museum control gestures', () => {
   assert.equal(classifyHandGeometry(hand([])).name, 'Closed_Fist');
 });
 
-test('photo palm must face camera, be raised and not be edge-on', () => {
+test('confirmation palm can use either side but must be raised and not be edge-on', () => {
   const palm = hand([0, 1, 2, 3], true);
   palm[0] = { x: 0.5, y: 0.68, z: 0 };
   palm[5] = { x: 0.43, y: 0.55, z: 0 };
   palm[9] = { x: 0.50, y: 0.51, z: 0 };
   palm[17] = { x: 0.58, y: 0.57, z: 0 };
   assert.equal(isDeliberatePalm(palm, 'Right'), true);
-  assert.equal(isDeliberatePalm(palm, 'Left'), false); // обратная сторона кисти
+  assert.equal(isDeliberatePalm(palm, 'Left'), true);
 
   const lowered = structuredClone(palm);
   lowered[0].y = 0.86;
@@ -44,6 +46,21 @@ test('photo palm must face camera, be raised and not be edge-on', () => {
   const edgeOn = structuredClone(palm);
   edgeOn[17].x = 0.445;
   assert.equal(isDeliberatePalm(edgeOn, 'Right'), false);
+});
+
+test('all control gestures require a raised and clearly visible hand', () => {
+  const raised = hand([0]);
+  raised[0].y = 0.64;
+  raised[9] = { x: 0.5, y: 0.5, z: 0 };
+  assert.equal(analyzeControlHand(raised).ready, true);
+
+  const lowered = structuredClone(raised);
+  lowered[0].y = 0.84;
+  assert.equal(analyzeControlHand(lowered).ready, false);
+
+  const tiny = structuredClone(raised);
+  tiny[9] = { x: 0.5, y: 0.63, z: 0 };
+  assert.equal(analyzeControlHand(tiny).ready, false);
 });
 
 test('short recognition dropouts do not interrupt palm hold', () => {
@@ -58,7 +75,7 @@ test('short recognition dropouts do not interrupt palm hold', () => {
   assert.equal(event.hold, null);
 });
 
-test('releasing palm cannot finish a nearly completed photo hold', () => {
+test('releasing palm cannot finish a nearly completed confirmation hold', () => {
   const ctl = new GestureController({ holdMs: 500, debounceFrames: 2, dropoutGraceFrames: 3 });
   for (const time of [0, 100, 200, 300, 400]) ctl.update('Open_Palm', time);
   const released = ctl.update('None', 600);
@@ -76,4 +93,15 @@ test('screen transition requires a real hand release before another action', () 
   ctl.update('Open_Palm', 800);
   ctl.update('Open_Palm', 880);
   assert.equal(ctl.update('Open_Palm', 1240).hold, 'Open_Palm');
+});
+
+test('Victory hold navigates by the visible side of the mirrored frame', () => {
+  const nav = new SideGestureNavigator({ holdMs: 1000, dropoutGraceMs: 200 });
+  assert.equal(nav.update({ name: 'Victory', wrist: { x: 0.8 } }, 0).action, null);
+  assert.equal(nav.update({ name: 'Victory', wrist: { x: 0.8 } }, 1000).action, 'next');
+  assert.equal(nav.update({ name: 'Victory', wrist: { x: 0.8 } }, 1200).action, null);
+  nav.update({ name: 'None', wrist: null }, 1500);
+  nav.update({ name: 'None', wrist: null }, 1800);
+  assert.equal(nav.update({ name: 'Victory', wrist: { x: 0.2 } }, 1900).direction, 'prev');
+  assert.equal(nav.update({ name: 'Victory', wrist: { x: 0.2 } }, 2900).action, 'prev');
 });

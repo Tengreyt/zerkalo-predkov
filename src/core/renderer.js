@@ -2,7 +2,7 @@
  * Отрисовка кадра: зеркальное видео + костюмы + (в debug) скелет.
  * Canvas 2D, один проход на кадр.
  */
-import { getCostumeLayers, getHeadwearImage, getManifest } from './assets.js';
+import { getCostumeConfig, getCostumeLayers, getHeadwearImage, getManifest } from './assets.js';
 import {
   layoutCostume,
   buildSleeveMeshes,
@@ -10,11 +10,22 @@ import {
   isWarpMeshSafe,
 } from './costumeLayout.js';
 import { LM } from '../config/settings.js';
+import { SleeveMeshSmoother } from './smoothing.js';
 
 const SKELETON_EDGES = [
   [11, 12], [11, 13], [13, 15], [12, 14], [14, 16],
   [11, 23], [12, 24], [23, 24], [23, 25], [25, 27], [24, 26], [26, 28],
 ];
+const sleeveSmoothers = new Map();
+
+export function resetSleeveSmoothing(trackingKey = null) {
+  if (trackingKey == null) sleeveSmoothers.clear();
+  else {
+    for (const key of sleeveSmoothers.keys()) {
+      if (key.startsWith(`${trackingKey}:`)) sleeveSmoothers.delete(key);
+    }
+  }
+}
 
 /** Рисует зеркальное видео на канву (селфи-режим). */
 export function drawMirroredVideo(ctx, video, W, H) {
@@ -146,6 +157,89 @@ function drawMeshGuides(ctx, mesh, labels, color) {
   ctx.restore();
 }
 
+/** Точечный силуэт, привязанный к позе и лежащий под PNG костюма. */
+export function drawBodyPointCloud(ctx, lm, W, H, opacity = 1) {
+  const visible = (i) => lm[i] && (lm[i].visibility ?? 1) >= 0.32;
+  const point = (i) => ({ x: lm[i].x * W, y: lm[i].y * H });
+  const shoulderWidth = visible(11) && visible(12)
+    ? Math.hypot((lm[12].x - lm[11].x) * W, (lm[12].y - lm[11].y) * H)
+    : 120;
+  const spacing = Math.max(10, Math.min(18, shoulderWidth * 0.075));
+  const dots = [];
+  const addSegment = (a, b) => {
+    if (!visible(a) || !visible(b)) return;
+    const p = point(a);
+    const q = point(b);
+    const steps = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / spacing));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      dots.push({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+    }
+  };
+  for (const [a, b] of SKELETON_EDGES) addSegment(a, b);
+
+  if ([11, 12, 23, 24].every(visible)) {
+    const a = point(11); const b = point(12); const c = point(23); const d = point(24);
+    for (let y = 0; y <= 1; y += 0.12) {
+      const left = { x: a.x + (c.x - a.x) * y, y: a.y + (c.y - a.y) * y };
+      const right = { x: b.x + (d.x - b.x) * y, y: b.y + (d.y - b.y) * y };
+      const cols = Math.max(4, Math.ceil(Math.hypot(right.x - left.x, right.y - left.y) / spacing));
+      for (let x = 0; x <= cols; x++) {
+        const t = x / cols;
+        dots.push({ x: left.x + (right.x - left.x) * t, y: left.y + (right.y - left.y) * t });
+      }
+    }
+  }
+
+  if (visible(7) && visible(8)) {
+    const l = point(7); const r = point(8);
+    const cx = (l.x + r.x) / 2; const cy = (l.y + r.y) / 2;
+    const rx = Math.max(18, Math.hypot(r.x - l.x, r.y - l.y) * 0.68);
+    for (let ring = 0.35; ring <= 1; ring += 0.22) {
+      for (let angle = 0; angle < Math.PI * 2; angle += 0.36) {
+        dots.push({ x: cx + Math.cos(angle) * rx * ring, y: cy + Math.sin(angle) * rx * 1.25 * ring });
+      }
+    }
+  }
+
+  ctx.save();
+  ctx.globalAlpha *= opacity;
+  ctx.shadowColor = 'rgba(115, 244, 224, 0.9)';
+  ctx.shadowBlur = Math.max(5, shoulderWidth * 0.025);
+  ctx.fillStyle = '#bff7e8';
+  const radius = Math.max(2.2, Math.min(4.5, shoulderWidth * 0.016));
+  for (const p of dots) {
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/** Контрольные точки рук остаются поверх цифровых рукавов. */
+function drawArmTrackingDots(ctx, lm, W, H, opacity = 1) {
+  const edges = [[11, 13], [13, 15], [12, 14], [14, 16]];
+  const visible = (i) => lm[i] && (lm[i].visibility ?? 1) >= 0.3;
+  ctx.save();
+  ctx.globalAlpha *= opacity;
+  ctx.fillStyle = '#d8fff4';
+  ctx.shadowColor = '#57f2d0';
+  ctx.shadowBlur = 10;
+  for (const [a, b] of edges) {
+    if (!visible(a) || !visible(b)) continue;
+    const p = { x: lm[a].x * W, y: lm[a].y * H };
+    const q = { x: lm[b].x * W, y: lm[b].y * H };
+    const count = Math.max(4, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / 18));
+    for (let i = 0; i <= count; i++) {
+      const t = i / count;
+      ctx.beginPath();
+      ctx.arc(p.x + (q.x - p.x) * t, p.y + (q.y - p.y) * t, i === 0 || i === count ? 4 : 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+
 /**
  * Рисует костюм одного человека.
  * @param {Array} lm сглаженные landmarks в ЗЕРКАЛЬНЫХ координатах
@@ -161,23 +255,39 @@ export function drawPersonCostume(
   opacity,
   showHeadwear = true,
   debugFit = false,
+  trackingKey = null,
+  timestampMs = performance.now(),
+  updateSleeves = true,
 ) {
   if (opacity <= 0.01) return;
   const manifest = getManifest();
   const resolvedId = manifest.costumes[costumeId] ? costumeId : 'cherkeska';
-  const costume = manifest.costumes[resolvedId];
+  const costume = getCostumeConfig(resolvedId);
   const withHead = showHeadwear && costume.headwear;
   const headwear = withHead ? manifest.headwear[costume.headwear] : null;
   const { body, bodyMesh: rawBodyMesh, head } = layoutCostume(lm, W, H, costume, headwear);
   const bodyMesh = isWarpMeshSafe(rawBodyMesh) ? rawBodyMesh : null;
   const layers = getCostumeLayers(resolvedId, bodyClass);
-  const sleeveMeshes = layers.sleeves ? buildSleeveMeshes(lm, W, H, costume) : null;
+  const rawSleeveMeshes = layers.sleeves ? buildSleeveMeshes(lm, W, H, costume) : null;
   const staticSleeves = layers.sleeves && bodyMesh
     ? buildStaticSleeveMeshes(bodyMesh, costume)
     : null;
+  let sleeveMeshes = rawSleeveMeshes;
+  if (layers.sleeves && trackingKey != null) {
+    const smootherKey = `${trackingKey}:${resolvedId}`;
+    let smoother = sleeveSmoothers.get(smootherKey);
+    if (!smoother) {
+      smoother = new SleeveMeshSmoother();
+      sleeveSmoothers.set(smootherKey, smoother);
+    }
+    sleeveMeshes = updateSleeves
+      ? smoother.update(rawSleeveMeshes, staticSleeves, timestampMs)
+      : smoother.state;
+  }
 
   ctx.save();
   ctx.globalAlpha = opacity;
+  if (costume.effect === 'body-points') drawBodyPointCloud(ctx, lm, W, H, 0.82);
   const drawSleeve = (side) => {
     const mesh = sleeveMeshes?.[side] ?? staticSleeves?.[side];
     if (mesh) drawWarpedImage(ctx, layers.sleeves[side], mesh);
@@ -201,7 +311,7 @@ export function drawPersonCostume(
     drawMeshGuides(
       ctx,
       bodyMesh,
-      ['ВЕРХ', 'ПЛЕЧИ', 'ТАЛИЯ', 'БЁДРА', 'КОЛЕНИ', 'ПОДОЛ'],
+      ['ВЕРХ', 'ПЛЕЧИ', 'ГРУДЬ', 'ТАЛИЯ', 'НИЗ ТАЛИИ', 'ТАЗ', 'КОЛЕНИ', 'ПОДОЛ'],
       '#44e5ff',
     );
     if (sleeveMeshes) {
@@ -235,6 +345,7 @@ export function drawPersonCostume(
       ctx.drawImage(headImage, head.x, head.y, head.w, head.h);
     }
   }
+  if (costume.effect === 'body-points') drawArmTrackingDots(ctx, lm, W, H, 0.9);
   ctx.restore();
 }
 

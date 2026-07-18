@@ -25,12 +25,6 @@ export default async function handler(request) {
   if (request.method !== 'POST') {
     return Response.json({ error: 'Method not allowed' }, { status: 405 });
   }
-  if (!process.env.BLOB_READ_WRITE_TOKEN) {
-    return Response.json(
-      { error: 'QR-хранилище ещё не подключено в Vercel' },
-      { status: 503 },
-    );
-  }
   const contentType = request.headers.get('content-type')?.split(';')[0];
   if (contentType !== 'image/jpeg') {
     return Response.json({ error: 'Разрешены только JPEG-фотографии' }, { status: 415 });
@@ -52,12 +46,20 @@ export default async function handler(request) {
   const createdAt = Date.now();
   const id = `${createdAt.toString(36)}-${randomUUID().replaceAll('-', '')}`;
   const pathname = `${PREFIX}${id}.jpg`;
-  await put(pathname, bytes, {
-    access: 'private',
-    addRandomSuffix: false,
-    contentType: 'image/jpeg',
-    cacheControlMaxAge: 3600,
-  });
+  try {
+    await put(pathname, bytes, {
+      access: 'private',
+      addRandomSuffix: false,
+      contentType: 'image/jpeg',
+      cacheControlMaxAge: 3600,
+    });
+  } catch (error) {
+    console.error('Photo blob upload failed:', error);
+    return Response.json(
+      { error: 'Облачное хранилище фотографий временно недоступно' },
+      { status: 503 },
+    );
+  }
 
   // Удаляем истёкшие снимки opportunistically при каждом новом фото.
   await cleanupExpiredPhotos(createdAt);

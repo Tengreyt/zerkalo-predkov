@@ -1,24 +1,25 @@
 <script setup>
-import { appState, toggleHeadwear } from '../../store/appState.js';
+import { appState, nextCostume, prevCostume, toggleHeadwear } from '../../store/appState.js';
 import { startCapture } from '../../composables/useMirror.js';
 import CostumeCarousel from '../CostumeCarousel.vue';
 import InfoCard from '../InfoCard.vue';
+import ProgressRing from '../ProgressRing.vue';
 </script>
 
 <template>
   <div class="screen live-screen">
     <transition name="fade">
       <div v-if="!appState.personPresent || appState.poseHint" class="fit-guide">
-        <svg viewBox="0 0 240 520" aria-hidden="true">
+        <svg viewBox="0 0 240 390" aria-hidden="true">
           <circle class="head" cx="120" cy="55" r="34" />
-          <path class="body" d="M74 120 L166 120 L158 272 L148 480 M166 120 L198 270 M74 120 L42 270 M82 272 L92 480" />
+          <path class="body" d="M74 120 L166 120 L158 292 L82 292 Z M166 120 L198 270 M74 120 L42 270" />
           <g class="anchors">
             <circle cx="74" cy="120" r="7" /><circle cx="166" cy="120" r="7" />
-            <circle cx="82" cy="272" r="7" /><circle cx="158" cy="272" r="7" />
-            <circle cx="92" cy="480" r="7" /><circle cx="148" cy="480" r="7" />
+            <circle cx="86" cy="205" r="7" /><circle cx="154" cy="205" r="7" />
+            <circle cx="82" cy="292" r="7" /><circle cx="158" cy="292" r="7" />
           </g>
         </svg>
-        <span>Покажите плечи и стопы · встаньте прямо</span>
+        <span>Покажите голову, плечи, талию и таз</span>
       </div>
     </transition>
 
@@ -27,10 +28,37 @@ import InfoCard from '../InfoCard.vue';
     </transition>
 
     <transition name="pop">
-      <div v-if="appState.countdown" class="countdown">{{ appState.countdown }}</div>
+      <div v-if="appState.countdown" class="countdown-overlay">
+        <ProgressRing
+          :progress="appState.countdownProgress"
+          :size="260"
+          :stroke-width="6"
+          aria-label="Обратный отсчёт до фотографии"
+        >
+          <strong>{{ appState.countdown }}</strong>
+          <span>Приготовьтесь</span>
+        </ProgressRing>
+      </div>
     </transition>
 
     <InfoCard class="info-card" />
+
+    <button
+      class="edge-nav edge-nav-left"
+      :class="{ active: appState.navigationDirection === 'prev' }"
+      aria-label="Предыдущий костюм"
+      @click="prevCostume"
+    >
+      <span>‹</span>
+    </button>
+    <button
+      class="edge-nav edge-nav-right"
+      :class="{ active: appState.navigationDirection === 'next' }"
+      aria-label="Следующий костюм"
+      @click="nextCostume"
+    >
+      <span>›</span>
+    </button>
 
     <div class="bottom-bar">
       <CostumeCarousel />
@@ -86,35 +114,82 @@ import InfoCard from '../InfoCard.vue';
 .fit-guide .anchors { fill: #d6be8c; stroke: rgba(12, 18, 13, 0.8); stroke-width: 3; }
 .pose-hint {
   position: absolute;
-  top: 48px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 210px;
+  left: 24px;
+  right: 440px;
+  text-align: center;
   background: rgba(12, 18, 13, 0.82);
   color: #f3ecd9;
   font-size: 28px;
   padding: 16px 36px;
   border-radius: 16px;
+  animation: pose-hint-window 6s ease forwards;
 }
-.countdown {
+@keyframes pose-hint-window {
+  0%, 82% { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
+}
+.countdown-overlay {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 220px;
-  font-weight: 700;
   color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 0 60px rgba(0, 0, 0, 0.6);
+  background: rgba(12, 18, 13, 0.24);
+  text-shadow: 0 0 40px rgba(0, 0, 0, 0.75);
   pointer-events: none !important;
+  z-index: 12;
+}
+.countdown-overlay strong {
+  font: 700 104px/0.85 Arial, sans-serif;
+}
+.countdown-overlay span {
+  margin-top: 14px;
+  color: #f3ecd9;
+  font: 600 17px/1 Arial, sans-serif;
+  letter-spacing: 0.04em;
 }
 .info-card {
   position: absolute;
   top: 40px;
   right: 40px;
   width: 360px;
-  max-height: calc(100dvh - 190px);
+  max-height: calc(100dvh - 220px);
   overflow: auto;
+  z-index: 6;
 }
+.edge-nav {
+  position: absolute;
+  top: 18%;
+  bottom: 138px;
+  width: clamp(64px, 9vw, 136px);
+  border: 0;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  z-index: 4;
+  transition: color 0.2s, background 0.2s;
+}
+.edge-nav-left { left: 0; }
+.edge-nav-right { right: 0; }
+.edge-nav span {
+  display: inline-block;
+  font: 300 clamp(64px, 8vw, 118px)/1 Arial, sans-serif;
+  transform: scale(0.92);
+  transition: transform 0.2s;
+}
+.edge-nav:hover,
+.edge-nav:focus-visible {
+  color: rgba(243, 236, 217, 0.9);
+  background: linear-gradient(90deg, rgba(12, 18, 13, 0.38), transparent);
+}
+.edge-nav-right:hover,
+.edge-nav-right:focus-visible {
+  background: linear-gradient(-90deg, rgba(12, 18, 13, 0.38), transparent);
+}
+.edge-nav:hover span,
+.edge-nav:focus-visible span { transform: scale(1.08); }
 .bottom-bar {
   position: absolute;
   left: 0;
@@ -126,6 +201,7 @@ import InfoCard from '../InfoCard.vue';
   gap: 32px;
   background: linear-gradient(transparent, rgba(12, 18, 13, 0.85));
   max-width: 100%;
+  z-index: 7;
 }
 .capture-btn {
   font-size: 26px;
@@ -162,13 +238,21 @@ import InfoCard from '../InfoCard.vue';
   }
   .headwear-btn { order: 2; flex: 1; }
   .capture-btn { order: 3; flex: 1.4; font-size: 20px; padding: 14px 18px; }
-  .pose-hint { top: 16px; width: calc(100vw - 24px); text-align: center; font-size: 20px; padding: 12px; }
+  .pose-hint {
+    top: calc(34dvh + 24px);
+    left: 12px;
+    right: 12px;
+    width: auto;
+    font-size: 20px;
+    padding: 12px;
+  }
+  .edge-nav { top: 35%; bottom: 190px; width: 58px; }
 }
 @media (max-width: 560px) {
   .info-card { font-size: 0.84em; max-height: 29dvh; }
   .headwear-btn, .capture-btn { font-size: 15px; padding: 11px 8px; }
   .fit-guide svg { height: 52vh; }
   .fit-guide span { font-size: 14px; }
-  .countdown { font-size: 42vw; }
+  .countdown-overlay :deep(.progress-ring) { transform: scale(0.78); }
 }
 </style>

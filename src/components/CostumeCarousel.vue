@@ -15,6 +15,7 @@ const items = computed(() =>
 function select(index) {
   appState.costumeIndex = index;
 }
+
 </script>
 
 <template>
@@ -54,6 +55,7 @@ function select(index) {
   overflow-x: auto;
   scrollbar-width: none;
   min-width: 0;
+  scroll-snap-type: x proximity;
 }
 .item {
   white-space: nowrap;
@@ -65,6 +67,7 @@ function select(index) {
   font-size: 19px;
   cursor: pointer;
   transition: all 0.15s;
+  scroll-snap-align: center;
 }
 .item.active {
   background: #d6be8c;

@@ -12,21 +12,20 @@ const CIRC = 2 * Math.PI * RADIUS;
 const dashoffset = computed(() => CIRC * (1 - appState.holdProgress));
 
 const holdLabel = computed(() =>
-  appState.screen === SCREENS.LIVE ? 'Съёмка' : appState.screen === SCREENS.RESULT ? 'Ещё раз' : 'Начать',
+  appState.screen === SCREENS.RESULT ? 'Ещё раз' : 'Начать',
 );
 
 // Легенда жестов по экрану.
 const legend = computed(() => {
   switch (appState.screen) {
     case SCREENS.IDLE:
-      return [{ icon: '✋', text: 'подними ладонь — начать' }];
+      return [];
     case SCREENS.LIVE:
       return [
-        { icon: '👍', text: 'следующий' },
-        { icon: '✌️', text: 'предыдущий' },
+        { icon: '✌️', text: 'держите справа/слева — листать' },
         { icon: '☝️', text: 'описание' },
         { icon: '✊', text: 'головной убор' },
-        { icon: '✋', text: 'ладонью к экрану — фото' },
+        { icon: '👎', text: 'сделать фото' },
       ];
     case SCREENS.RESULT:
       return [
@@ -43,16 +42,34 @@ const showLegend = computed(
 );
 
 const showPalmFeedback = computed(() =>
-  appState.screen === SCREENS.LIVE &&
-  appState.gestureSource === 'palm-rejected' &&
+  appState.screen !== SCREENS.PROCESSING &&
+  appState.screen !== SCREENS.LIVE &&
+  ['palm-rejected', 'gesture-rejected'].includes(appState.gestureSource) &&
   !appState.palmReady,
+);
+
+const navigationLabel = computed(() =>
+  appState.navigationDirection === 'next' ? 'Следующий костюм' : 'Предыдущий костюм',
 );
 </script>
 
 <template>
   <div class="hud">
     <transition name="fade">
-      <div v-if="appState.holdProgress > 0.02" class="hold-ring">
+      <div
+        v-if="appState.screen === SCREENS.LIVE && appState.navigationDirection"
+        class="navigation-feedback"
+        :class="appState.navigationDirection"
+      >
+        <span class="navigation-arrow">{{ appState.navigationDirection === 'next' ? '›' : '‹' }}</span>
+        <span>{{ navigationLabel }}</span>
+        <span class="navigation-track">
+          <i :style="{ transform: `scaleX(${appState.navigationProgress})` }" />
+        </span>
+      </div>
+    </transition>
+    <transition name="fade">
+      <div v-if="appState.screen !== SCREENS.IDLE && appState.holdProgress > 0.02" class="hold-ring">
         <svg viewBox="0 0 120 120">
           <circle class="track" cx="60" cy="60" :r="RADIUS" />
           <circle
@@ -69,7 +86,7 @@ const showPalmFeedback = computed(() =>
     </transition>
 
     <transition name="fade">
-      <div v-if="showPalmFeedback" class="palm-feedback">
+      <div v-if="showPalmFeedback" :key="appState.palmReason" class="palm-feedback">
         ✋ {{ appState.palmReason }}
       </div>
     </transition>
@@ -130,17 +147,47 @@ const showPalmFeedback = computed(() =>
 }
 .legend {
   position: absolute;
-  left: 50%;
-  bottom: 128px;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 22px;
-  padding: 12px 24px;
+  left: 24px;
+  top: 24px;
+  display: grid;
+  gap: 8px;
+  padding: 14px 18px;
   background: rgba(12, 18, 13, 0.72);
   border: 1px solid rgba(214, 190, 140, 0.3);
-  border-radius: 999px;
+  border-radius: 16px;
   backdrop-filter: blur(6px);
   max-width: calc(100vw - 32px);
+}
+.navigation-feedback {
+  position: absolute;
+  top: 50%;
+  width: 190px;
+  transform: translateY(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  color: #f3ecd9;
+  font-size: 16px;
+  text-shadow: 0 2px 10px #000;
+}
+.navigation-feedback.prev { left: 18px; }
+.navigation-feedback.next { right: 18px; }
+.navigation-arrow { font: 300 84px/0.8 Arial, sans-serif; }
+.navigation-track {
+  width: 116px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(243, 236, 217, 0.2);
+}
+.navigation-track i {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-origin: left;
+  border-radius: inherit;
+  background: #d6be8c;
+  transition: transform 0.08s linear;
 }
 .palm-feedback {
   position: absolute;
@@ -156,6 +203,11 @@ const showPalmFeedback = computed(() =>
   font-size: 19px;
   text-align: center;
   backdrop-filter: blur(6px);
+  animation: feedback-window 6s ease forwards;
+}
+@keyframes feedback-window {
+  0%, 82% { opacity: 1; visibility: visible; }
+  100% { opacity: 0; visibility: hidden; }
 }
 .legend-item {
   display: flex;
@@ -172,5 +224,6 @@ const showPalmFeedback = computed(() =>
   .legend { display: none; }
   .hold-ring { width: 130px; height: 130px; }
   .palm-feedback { top: 12%; font-size: 15px; border-radius: 14px; }
+  .navigation-feedback { width: 132px; font-size: 13px; }
 }
 </style>

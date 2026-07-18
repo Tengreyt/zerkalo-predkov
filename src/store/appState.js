@@ -24,6 +24,8 @@ const state = reactive({
 
   /** Обратный отсчёт перед снимком: null — не идёт. */
   countdown: null,
+  /** Плавный прогресс обратного отсчёта 0..1. */
+  countdownProgress: 0,
 
   /** Подсказка позы («Встаньте прямо…») либо null. */
   poseHint: null,
@@ -48,6 +50,10 @@ const state = reactive({
   palmReady: false,
   /** Почему строгая проверка ладони не прошла (только для debug/подсказки). */
   palmReason: 'Рука не найдена',
+
+  /** Удержание ✌️ у края: направление и прогресс для боковой подсказки. */
+  navigationDirection: null,
+  navigationProgress: 0,
 
   /** dataURL готового фото и dataURL QR-кода. */
   photoUrl: null,
@@ -88,6 +94,7 @@ export function resetToIdle() {
   clearTimeout(idleTimer);
   state.screen = SCREENS.IDLE;
   state.countdown = null;
+  state.countdownProgress = 0;
   state.poseHint = null;
   state.poseReady = false;
   state.photoUrl = null;
@@ -100,6 +107,8 @@ export function resetToIdle() {
   state.holdProgress = 0;
   state.palmReady = false;
   state.palmReason = 'Рука не найдена';
+  state.navigationDirection = null;
+  state.navigationProgress = 0;
   state.gestureSource = 'none';
   state.captureBlockReason = null;
 }
