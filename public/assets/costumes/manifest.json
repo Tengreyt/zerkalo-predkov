@@ -1,0 +1,587 @@
+{
+  "version": 3,
+  "note": "Якоря костюмов из реальных фото проставляет scripts/prepare-real-assets.mjs. Мюридская форма: слот не создан — ждём референсы от университета.",
+  "costumes": {
+    "cherkeska": {
+      "title": "Черкеска",
+      "kind": "body",
+      "sizes": [],
+      "anchors": {
+        "canvas": [
+          497,
+          1188
+        ],
+        "left_shoulder": [
+          156,
+          74
+        ],
+        "right_shoulder": [
+          342,
+          74
+        ]
+      },
+      "headwear": "papakha_ar",
+      "background": "bg_mountains_towers",
+      "fit": {
+        "body_rows": {
+          "waist": 0.23,
+          "hips": 0.4,
+          "knees": 0.7,
+          "hem": 1
+        },
+        "sleeves": {
+          "left": {
+            "polygon": [
+              [
+                16,
+                51
+              ],
+              [
+                169,
+                51
+              ],
+              [
+                141,
+                261
+              ],
+              [
+                108,
+                551
+              ],
+              [
+                16,
+                551
+              ]
+            ],
+            "rows": {
+              "shoulder": {
+                "left": [
+                  78,
+                  74
+                ],
+                "right": [
+                  156,
+                  74
+                ]
+              },
+              "elbow": {
+                "left": [
+                  51,
+                  301
+                ],
+                "right": [
+                  121,
+                  301
+                ]
+              },
+              "wrist": {
+                "left": [
+                  20,
+                  521
+                ],
+                "right": [
+                  88,
+                  521
+                ]
+              }
+            }
+          },
+          "right": {
+            "polygon": [
+              [
+                328,
+                51
+              ],
+              [
+                481,
+                51
+              ],
+              [
+                481,
+                551
+              ],
+              [
+                389,
+                551
+              ],
+              [
+                356,
+                261
+              ]
+            ],
+            "rows": {
+              "shoulder": {
+                "left": [
+                  342,
+                  74
+                ],
+                "right": [
+                  420,
+                  74
+                ]
+              },
+              "elbow": {
+                "left": [
+                  376,
+                  301
+                ],
+                "right": [
+                  446,
+                  301
+                ]
+              },
+              "wrist": {
+                "left": [
+                  409,
+                  521
+                ],
+                "right": [
+                  477,
+                  521
+                ]
+              }
+            }
+          }
+        },
+        "coordinate_padding": 16
+      }
+    },
+    "burka": {
+      "title": "Черкеска с буркой",
+      "kind": "body",
+      "sizes": [],
+      "anchors": {
+        "canvas": [
+          402,
+          1211
+        ],
+        "left_shoulder": [
+          97,
+          75
+        ],
+        "right_shoulder": [
+          305,
+          75
+        ]
+      },
+      "headwear": "papakha_ar",
+      "background": "bg_mountains_towers",
+      "fit": {
+        "body_rows": {
+          "waist": 0.19,
+          "hips": 0.34,
+          "knees": 0.69,
+          "hem": 1
+        },
+        "coordinate_padding": 16
+      }
+    },
+    "gabali_green": {
+      "title": "Гӏабали (зелёное)",
+      "kind": "body",
+      "sizes": [],
+      "anchors": {
+        "canvas": [
+          556,
+          1129
+        ],
+        "left_shoulder": [
+          167,
+          68
+        ],
+        "right_shoulder": [
+          389,
+          68
+        ]
+      },
+      "headwear": "kortali",
+      "background": "bg_mountains_towers",
+      "fit": {
+        "body_rows": {
+          "waist": 0.22,
+          "hips": 0.34,
+          "knees": 0.68,
+          "hem": 1
+        },
+        "sleeves": {
+          "left": {
+            "polygon": [
+              [
+                0,
+                45
+              ],
+              [
+                195,
+                45
+              ],
+              [
+                171,
+                235
+              ],
+              [
+                138,
+                500
+              ],
+              [
+                95,
+                755
+              ],
+              [
+                0,
+                755
+              ]
+            ],
+            "rows": {
+              "shoulder": {
+                "left": [
+                  88,
+                  68
+                ],
+                "right": [
+                  167,
+                  68
+                ]
+              },
+              "elbow": {
+                "left": [
+                  52,
+                  330
+                ],
+                "right": [
+                  139,
+                  330
+                ]
+              },
+              "wrist": {
+                "left": [
+                  8,
+                  690
+                ],
+                "right": [
+                  102,
+                  690
+                ]
+              }
+            }
+          },
+          "right": {
+            "polygon": [
+              [
+                361,
+                45
+              ],
+              [
+                556,
+                45
+              ],
+              [
+                556,
+                755
+              ],
+              [
+                461,
+                755
+              ],
+              [
+                418,
+                500
+              ],
+              [
+                385,
+                235
+              ]
+            ],
+            "rows": {
+              "shoulder": {
+                "left": [
+                  389,
+                  68
+                ],
+                "right": [
+                  468,
+                  68
+                ]
+              },
+              "elbow": {
+                "left": [
+                  417,
+                  330
+                ],
+                "right": [
+                  504,
+                  330
+                ]
+              },
+              "wrist": {
+                "left": [
+                  454,
+                  690
+                ],
+                "right": [
+                  548,
+                  690
+                ]
+              }
+            }
+          }
+        },
+        "coordinate_padding": 0
+      }
+    },
+    "gabali_red": {
+      "title": "Гӏабали (бордовое)",
+      "kind": "body",
+      "sizes": [],
+      "anchors": {
+        "canvas": [
+          637,
+          1316
+        ],
+        "left_shoulder": [
+          191,
+          66
+        ],
+        "right_shoulder": [
+          446,
+          66
+        ]
+      },
+      "headwear": "kortali",
+      "background": "bg_mountains_towers",
+      "fit": {
+        "body_rows": {
+          "waist": 0.22,
+          "hips": 0.34,
+          "knees": 0.68,
+          "hem": 1
+        },
+        "sleeves": {
+          "left": {
+            "polygon": [
+              [
+                0,
+                40
+              ],
+              [
+                220,
+                40
+              ],
+              [
+                195,
+                260
+              ],
+              [
+                154,
+                580
+              ],
+              [
+                105,
+                850
+              ],
+              [
+                0,
+                850
+              ]
+            ],
+            "rows": {
+              "shoulder": {
+                "left": [
+                  102,
+                  66
+                ],
+                "right": [
+                  191,
+                  66
+                ]
+              },
+              "elbow": {
+                "left": [
+                  60,
+                  375
+                ],
+                "right": [
+                  155,
+                  375
+                ]
+              },
+              "wrist": {
+                "left": [
+                  8,
+                  775
+                ],
+                "right": [
+                  115,
+                  775
+                ]
+              }
+            }
+          },
+          "right": {
+            "polygon": [
+              [
+                417,
+                40
+              ],
+              [
+                637,
+                40
+              ],
+              [
+                637,
+                850
+              ],
+              [
+                532,
+                850
+              ],
+              [
+                483,
+                580
+              ],
+              [
+                442,
+                260
+              ]
+            ],
+            "rows": {
+              "shoulder": {
+                "left": [
+                  446,
+                  66
+                ],
+                "right": [
+                  535,
+                  66
+                ]
+              },
+              "elbow": {
+                "left": [
+                  482,
+                  375
+                ],
+                "right": [
+                  577,
+                  375
+                ]
+              },
+              "wrist": {
+                "left": [
+                  522,
+                  775
+                ],
+                "right": [
+                  629,
+                  775
+                ]
+              }
+            }
+          }
+        },
+        "coordinate_padding": 0
+      }
+    },
+    "gown": {
+      "title": "Мантия выпускника",
+      "kind": "body",
+      "sizes": [
+        "slim",
+        "regular",
+        "large"
+      ],
+      "anchors": {
+        "canvas": [
+          1000,
+          1400
+        ],
+        "left_shoulder": [
+          270,
+          200
+        ],
+        "right_shoulder": [
+          730,
+          200
+        ]
+      },
+      "headwear": "mortarboard",
+      "background": "bg_campus"
+    }
+  },
+  "headwear": {
+    "papakha_ar": {
+      "anchors": {
+        "canvas": [
+          1094,
+          865
+        ],
+        "left_ear": [
+          185,
+          820
+        ],
+        "right_ear": [
+          909,
+          820
+        ]
+      },
+      "fit": {
+        "mode": "head-mesh",
+        "top_ellipse_y": 160,
+        "band_y": 565,
+        "width_factor": 1.58,
+        "height_factor": 0.78,
+        "bottom_lift": 0.16
+      }
+    },
+    "papakha": {
+      "anchors": {
+        "canvas": [
+          140,
+          137
+        ],
+        "left_ear": [
+          25,
+          123
+        ],
+        "right_ear": [
+          115,
+          123
+        ]
+      }
+    },
+    "kortali": {
+      "anchors": {
+        "canvas": [
+          600,
+          600
+        ],
+        "left_ear": [
+          170,
+          380
+        ],
+        "right_ear": [
+          430,
+          380
+        ]
+      }
+    },
+    "mortarboard": {
+      "anchors": {
+        "canvas": [
+          600,
+          400
+        ],
+        "left_ear": [
+          160,
+          330
+        ],
+        "right_ear": [
+          440,
+          330
+        ]
+      }
+    }
+  },
+  "backgrounds": {
+    "bg_mountains_towers": "bg_mountains_towers.png",
+    "bg_campus": "bg_campus.png"
+  }
+}

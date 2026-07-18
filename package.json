@@ -1,0 +1,26 @@
+{
+  "name": "zerkalo-predkov",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Интерактивная виртуальная примерочная национального костюма — экспонат цифрового музея ЧГУ",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "node --test",
+    "preview": "vite preview",
+    "audit:assets": "node scripts/audit-assets.mjs",
+    "placeholders": "node scripts/generate-placeholders.mjs"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.14",
+    "@vercel/blob": "^2.6.1",
+    "qrcode": "^1.5.3",
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "sharp": "^0.35.3",
+    "vite": "^5.2.0"
+  }
+}

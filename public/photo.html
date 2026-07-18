@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Ваше фото — Зеркало предков</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; background: #0c120d; color: #f3ecd9; }
+      body { font-family: Georgia, "Times New Roman", serif; display: grid; place-items: center; padding: 20px; }
+      main { width: min(760px, 100%); text-align: center; }
+      h1 { margin: 0 0 8px; color: #d6be8c; font-size: clamp(30px, 8vw, 52px); }
+      .subtitle { margin: 0 0 20px; color: rgba(243,236,217,.68); }
+      img { display: block; width: 100%; max-height: 70vh; object-fit: contain; border-radius: 16px; background: #172018; box-shadow: 0 18px 60px #0009; }
+      .actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+      a { padding: 14px 24px; border-radius: 14px; text-decoration: none; font-weight: 700; }
+      .download { background: #d6be8c; color: #1d2a20; }
+      .open { border: 1px solid #d6be8c88; color: #f3ecd9; }
+      .note { margin-top: 16px; font-size: 14px; color: rgba(243,236,217,.58); }
+      .error { padding: 30px; border: 1px solid #d6be8c55; border-radius: 16px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Зеркало предков</h1>
+      <p class="subtitle">Ваше фото в национальном костюме</p>
+      <div id="content"><p>Загружаем фотографию…</p></div>
+    </main>
+    <script>
+      const id = new URLSearchParams(location.search).get('id') || '';
+      const valid = /^[a-z0-9]+-[a-f0-9]{32}$/.test(id);
+      const content = document.querySelector('#content');
+      if (!valid) {
+        content.innerHTML = '<div class="error">Ссылка на фотографию некорректна.</div>';
+      } else {
+        const viewUrl = `/api/photo?id=${encodeURIComponent(id)}`;
+        const downloadUrl = `${viewUrl}&download=1`;
+        const img = new Image();
+        img.alt = 'Фото из виртуальной примерочной';
+        img.onload = () => {
+          content.replaceChildren(img);
+          const actions = document.createElement('div');
+          actions.className = 'actions';
+          actions.innerHTML = `<a class="download" href="${downloadUrl}">⬇ Скачать фото</a><a class="open" href="${viewUrl}" target="_blank" rel="noopener">Открыть оригинал</a>`;
+          content.append(actions);
+          const note = document.createElement('p');
+          note.className = 'note';
+          note.textContent = 'Ссылка действует около одного часа. Сохраните фотографию сейчас.';
+          content.append(note);
+        };
+        img.onerror = () => {
+          content.innerHTML = '<div class="error">Фотография не найдена или срок ссылки уже истёк.</div>';
+        };
+        img.src = viewUrl;
+      }
+    </script>
+  </body>
+</html>

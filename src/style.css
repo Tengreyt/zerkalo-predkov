@@ -1,0 +1,144 @@
+/* Глобальные стили киоска «Зеркало предков» */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0c120d;
+  font-family: 'Georgia', 'Times New Roman', serif;
+}
+
+body { min-height: 100dvh; }
+
+.kiosk {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.mirror-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.mirror-canvas.hidden {
+  visibility: hidden;
+}
+
+.screen {
+  position: absolute;
+  inset: 0;
+}
+
+.btn {
+  font-family: inherit;
+  font-size: 21px;
+  padding: 14px 30px;
+  border-radius: 14px;
+  border: 2px solid rgba(214, 190, 140, 0.5);
+  background: rgba(12, 18, 13, 0.75);
+  color: #f3ecd9;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.15s;
+}
+.btn:active {
+  transform: scale(0.96);
+}
+.btn-primary {
+  background: #d6be8c;
+  border-color: #d6be8c;
+  color: #1d2a20;
+  font-weight: 700;
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: rgba(243, 236, 217, 0.6);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn:focus-visible {
+  outline: 3px solid #fff0b7;
+  outline-offset: 3px;
+}
+
+.loading,
+.load-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  color: #d6be8c;
+  font-size: 26px;
+  text-align: center;
+  padding: 40px;
+  background: #0c120d;
+  z-index: 50;
+}
+.spinner {
+  width: 54px;
+  height: 54px;
+  border: 4px solid rgba(214, 190, 140, 0.25);
+  border-top-color: #d6be8c;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* Печать 10×15: только фото, во весь лист */
+@media print {
+  @page {
+    size: 15cm 10cm;
+    margin: 0;
+  }
+  body * {
+    visibility: hidden !important;
+  }
+  .print-photo {
+    visibility: visible !important;
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
